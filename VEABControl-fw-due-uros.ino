@@ -5,7 +5,7 @@
 #define VEAB
 //#define POT
 
-// Set topic names to avoid duplication
+// Set topic unique names
 #define SUB_TOPICNAME "/VEAB1/desired"
 #define PUB_TOPICNAME "/VEAB1/realized"
 //===============================================
@@ -19,11 +19,32 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 
-//#include <std_msgs/msg/int32.h>
-//#include <std_msgs/msg/u_int16.h>
 #include <std_msgs/msg/u_int16_multi_array.h>
+#include <std_msgs/msg/multi_array_dimension.h>
+#include <std_msgs/msg/multi_array_layout.h>
 
-std_msgs__msg__UInt16MultiArray msg;
+
+// https://github.com/micro-ROS/micro_ros_arduino/issues/413
+/*
+std_msgs__msg__Int64MultiArray msg;
+
+msg.data.capacity = 100; 
+msg.data.size = 0;
+msg.data.data = (int64_t*) malloc(msg.data.capacity * sizeof(int64_t));
+
+msg.layout.dim.capacity = 100;
+msg.layout.dim.size = 0;
+msg.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
+
+for(size_t i = 0; i < msg.layout.dim.capacity; i++){
+    msg.layout.dim.data[i].label.capacity = 20;
+    msg.layout.dim.data[i].label.size = 0;
+    msg.layout.dim.data[i].label.data = (char*) malloc(msg.layout.dim.data[i].label.capacity * sizeof(char));
+}
+*/
+
+std_msgs__msg__UInt16MultiArray msg_pub;
+std_msgs__msg__UInt16MultiArray msg_sub;
 rcl_subscription_t subscriber;
 rcl_publisher_t publisher;
 rclc_executor_t executor;
@@ -40,8 +61,8 @@ rcl_timer_t timer;
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
-unsigned int desired[CH_NUM];
-unsigned int realized[CH_NUM];
+volatile uint16_t desired[CH_NUM];
+volatile uint16_t realized[CH_NUM];
 
 
 void error_loop(){
@@ -56,32 +77,25 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
   
   RCLC_UNUSED(last_call_time);
   if (timer != NULL) {
-    for (int i = 0; i < CH_NUM; i++) {
-
-      msg.data.data[i] = realized[i];
-#ifdef VEAB
-      analogWrite(i+PWM_PIN_LOWEST, (int)desired[i]);
-#endif
+    for (size_t i = 0; i < CH_NUM; i++) {
+      msg_pub.data.data[i] = realized[i];
     }
-    RCSOFTCHECK(rcl_publish(&publisher, &msg, NULL));
+    RCSOFTCHECK(rcl_publish(&publisher, &msg_pub, NULL));
   }
 }
 
 #ifdef VEAB
 void subscription_callback(const void * msgin)
-{  
+{
   const std_msgs__msg__UInt16MultiArray * msg = (const std_msgs__msg__UInt16MultiArray *)msgin;
-  for (int i = 0; i < CH_NUM; i++) {
+  for (size_t i = 0; i < CH_NUM; i++) {
     desired[i] = msg->data.data[i];
-  }
-  //msg->data[]
-  //digitalWrite(LED_PIN, (msg->data == 0) ? LOW : HIGH);  
+  } 
 }
 #endif
 
+
 void setup() {
-  //Serial.begin(115200);
-  //set_microros_serial_transports(Serial);
   set_microros_transports();
   
   // configure LED pin
@@ -89,28 +103,51 @@ void setup() {
   digitalWrite(LED_PIN, HIGH);
 
   // configure PWM pins
-  for (int pin = PWM_PIN_LOWEST; pin < PWM_PIN_LOWEST+12; pin++) {
+  for (size_t pin = PWM_PIN_LOWEST; pin < PWM_PIN_LOWEST+12; pin++) {
     pinMode(pin, OUTPUT);
   }
 
   // configure Analog pins
-  for (int pin = ANALOG_PIN_LOWEST; pin < ANALOG_PIN_LOWEST+12; pin++) {
+  for (size_t pin = ANALOG_PIN_LOWEST; pin < ANALOG_PIN_LOWEST+12; pin++) {
     pinMode(pin, INPUT);
   }
 
   // initialize variables
-  msg.data.capacity = CH_NUM;
-  msg.data.size = CH_NUM;
-  msg.data.data = (uint16_t*)malloc(msg.data.capacity * sizeof(uint16_t));
+  msg_pub.data.capacity = CH_NUM;
+  msg_pub.data.size = 0;
+  msg_pub.data.data = (uint16_t*)malloc(msg_pub.data.capacity * sizeof(uint16_t));
+  msg_pub.layout.dim.capacity = 1; // 1-dimentional array: vector
+  msg_pub.layout.dim.size = 0;
+  msg_pub.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_pub.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
+  for(size_t i = 0; i < msg_pub.layout.dim.capacity; i++){
+    msg_pub.layout.dim.data[i].label.capacity = 20;
+    msg_pub.layout.dim.data[i].label.size = 0;
+    msg_pub.layout.dim.data[i].label.data = (char*) malloc(msg_pub.layout.dim.data[i].label.capacity * sizeof(char));
+  }
 
-  for (int i = 0; i < CH_NUM; i++) {
-    desired[i] = 0;
+  msg_sub.data.capacity = CH_NUM;
+  msg_sub.data.size = 0;
+  msg_sub.data.data = (uint16_t*)malloc(msg_sub.data.capacity * sizeof(uint16_t));
+  msg_sub.layout.dim.capacity = 1; // 1-dimentional array: vector
+  msg_sub.layout.dim.size = 0;
+  msg_sub.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg_sub.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
+  for(size_t i = 0; i < msg_sub.layout.dim.capacity; i++){
+    msg_sub.layout.dim.data[i].label.capacity = 20;
+    msg_sub.layout.dim.data[i].label.size = 0;
+    msg_sub.layout.dim.data[i].label.data = (char*) malloc(msg_sub.layout.dim.data[i].label.capacity * sizeof(char));
+  }
+
+
+  for (size_t i = 0; i < CH_NUM; i++) {
+    desired[i] = 128;
     realized[i] = 0;
-    msg.data.data[i] = 0;
+    msg_pub.data.data[i] = 0;
+    msg_sub.data.data[i] = 0;
   }
 
   delay(2000);
 
+  // create default allocator
   allocator = rcl_get_default_allocator();
 
   // create init_options
@@ -122,7 +159,6 @@ void setup() {
 #ifdef VEAB
   // create subscriber
   RCCHECK(rclc_subscription_init_default(
-  //RCCHECK(rclc_subscription_init_best_effort(
     &subscriber,
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
@@ -131,14 +167,13 @@ void setup() {
 
   // create publisher
   RCCHECK(rclc_publisher_init_default(
-  //RCCHECK(rclc_publisher_init_best_effort(
     &publisher,
     &node,
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
     PUB_TOPICNAME));
 
   // create timer,
-  const unsigned int timer_timeout = 8;
+  const unsigned int timer_timeout = 5;
   RCCHECK(rclc_timer_init_default(
     &timer,
     &support,
@@ -146,18 +181,27 @@ void setup() {
     timer_callback));
 
   // create executor
+#ifdef VEAB
+  RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA));
+#endif
+#ifdef POT
   RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
+#endif
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
 
-  //msg.data = 0;
 }
 
 void loop() {
 
   // ADC
-  for (int i = 0; i < CH_NUM; i++) {
-    realized[i] = analogRead(i+ANALOG_PIN_LOWEST);
+  for (size_t i = 0; i < CH_NUM; i++) {
+    //realized[i] = analogRead(i+ANALOG_PIN_LOWEST);
+    realized[i] = desired[i];
+#ifdef VEAB
+    analogWrite(i+PWM_PIN_LOWEST, desired[i]);
+#endif
   }
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
+  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
 
 }
