@@ -121,7 +121,7 @@ void setup() {
 
   // just give initial values
   for (size_t i = 0; i < CH_NUM; i++) {
-    desired[i] = 0;
+    desired[i] = 255; // Using n-ch MOSFET. Set the initial output voltage is 0 [V].
     realized[i] = 0;
     msg_pub.data.data[i] = 0;
     msg_sub.data.data[i] = 0;
