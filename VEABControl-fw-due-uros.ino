@@ -59,9 +59,11 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
   RCLC_UNUSED(last_call_time);
   if (timer != NULL) {
+    // update a message
     for (size_t i = 0; i < CH_NUM; i++) {
       msg_pub.data.data[i] = realized[i];
     }
+    // publish
     RCSOFTCHECK(rcl_publish(&publisher, &msg_pub, NULL));
   }
 }
@@ -90,7 +92,7 @@ void setup() {
     pinMode(pin+ANALOG_PIN_LOWEST, INPUT);
   }
 
-  // initialize variables
+  // create ROS2 message variables
   // NOTE) Due to the minimality of micro-ROS, it easily accesses to wrong address 
   // if a message does not have properly allocated memory volume. The following 
   // initialization is actually crutial. Otherwise, the subscription_callback 
@@ -118,6 +120,14 @@ void setup() {
     msg_sub.layout.dim.data[i].label.size = 0;
     msg_sub.layout.dim.data[i].label.data = (char*) malloc(msg_sub.layout.dim.data[i].label.capacity * sizeof(char));
   }
+
+  // prepare the publish message. initialize values.
+  msg_pub.data.size = CH_NUM;
+  msg_pub.layout.dim.size = 1;
+  msg_pub.layout.dim.data[0].label.data = "channels";
+  msg_pub.layout.dim.data[0].label.size = strlen(msg_pub.layout.dim.data[0].label.data);
+  msg_pub.layout.dim.data[0].size = CH_NUM;
+  msg_pub.layout.dim.data[0].stride = CH_NUM;
 
   // just give initial values
   for (size_t i = 0; i < CH_NUM; i++) {
