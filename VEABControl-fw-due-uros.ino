@@ -23,26 +23,6 @@
 #include <std_msgs/msg/multi_array_dimension.h>
 #include <std_msgs/msg/multi_array_layout.h>
 
-
-// https://github.com/micro-ROS/micro_ros_arduino/issues/413
-/*
-std_msgs__msg__Int64MultiArray msg;
-
-msg.data.capacity = 100; 
-msg.data.size = 0;
-msg.data.data = (int64_t*) malloc(msg.data.capacity * sizeof(int64_t));
-
-msg.layout.dim.capacity = 100;
-msg.layout.dim.size = 0;
-msg.layout.dim.data = (std_msgs__msg__MultiArrayDimension*) malloc(msg.layout.dim.capacity * sizeof(std_msgs__msg__MultiArrayDimension));
-
-for(size_t i = 0; i < msg.layout.dim.capacity; i++){
-    msg.layout.dim.data[i].label.capacity = 20;
-    msg.layout.dim.data[i].label.size = 0;
-    msg.layout.dim.data[i].label.data = (char*) malloc(msg.layout.dim.data[i].label.capacity * sizeof(char));
-}
-*/
-
 std_msgs__msg__UInt16MultiArray msg_pub;
 std_msgs__msg__UInt16MultiArray msg_sub;
 rcl_subscription_t subscriber;
@@ -61,6 +41,9 @@ rcl_timer_t timer;
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 
+// Since ARM Cortex-M3 does not perform parallel processing, 
+// there is no need to specify volatile, but for reusing this code
+// and clarifying the meaning, I specify volatile.
 volatile uint16_t desired[CH_NUM];
 volatile uint16_t realized[CH_NUM];
 
@@ -74,7 +57,6 @@ void error_loop(){
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
-  
   RCLC_UNUSED(last_call_time);
   if (timer != NULL) {
     for (size_t i = 0; i < CH_NUM; i++) {
@@ -102,17 +84,17 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);
 
-  // configure PWM pins
-  for (size_t pin = PWM_PIN_LOWEST; pin < PWM_PIN_LOWEST+12; pin++) {
-    pinMode(pin, OUTPUT);
-  }
-
-  // configure Analog pins
-  for (size_t pin = ANALOG_PIN_LOWEST; pin < ANALOG_PIN_LOWEST+12; pin++) {
-    pinMode(pin, INPUT);
+  // configure I/O pins
+  for (size_t pin = 0; pin < CH_NUM; pin++) {
+    pinMode(pin+PWM_PIN_LOWEST, OUTPUT);
+    pinMode(pin+ANALOG_PIN_LOWEST, INPUT);
   }
 
   // initialize variables
+  // NOTE) Due to the minimality of micro-ROS, it easily accesses to wrong address 
+  // if a message does not have properly allocated memory volume. The following 
+  // initialization is actually crutial. Otherwise, the subscription_callback 
+  // smashes the memory.
   msg_pub.data.capacity = CH_NUM;
   msg_pub.data.size = 0;
   msg_pub.data.data = (uint16_t*)malloc(msg_pub.data.capacity * sizeof(uint16_t));
@@ -137,9 +119,9 @@ void setup() {
     msg_sub.layout.dim.data[i].label.data = (char*) malloc(msg_sub.layout.dim.data[i].label.capacity * sizeof(char));
   }
 
-
+  // just give initial values
   for (size_t i = 0; i < CH_NUM; i++) {
-    desired[i] = 128;
+    desired[i] = 0;
     realized[i] = 0;
     msg_pub.data.data[i] = 0;
     msg_sub.data.data[i] = 0;
@@ -194,14 +176,15 @@ void setup() {
 
 void loop() {
 
-  // ADC
+  // peform ADC/DAC and update global variables
   for (size_t i = 0; i < CH_NUM; i++) {
-    //realized[i] = analogRead(i+ANALOG_PIN_LOWEST);
-    realized[i] = desired[i];
+    realized[i] = analogRead(i+ANALOG_PIN_LOWEST);
 #ifdef VEAB
     analogWrite(i+PWM_PIN_LOWEST, desired[i]);
 #endif
   }
+
+  // let executors to run
   RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
 
 }
