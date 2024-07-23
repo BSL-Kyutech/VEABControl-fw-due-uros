@@ -40,6 +40,7 @@ rcl_timer_t timer;
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
 #define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
+#define RCCOND(fn) { rcl_ret_t temp_rc = fn; temp_rc }
 
 // Since ARM Cortex-M3 does not perform parallel processing, 
 // there is no need to specify volatile, but for reusing this code
@@ -143,45 +144,72 @@ void setup() {
   allocator = rcl_get_default_allocator();
 
   // create init_options
-  RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+  while( rclc_support_init(&support, 0, NULL, &allocator) != RCL_RET_OK ){}
+  //RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
 
   // create node
-  RCCHECK(rclc_node_init_default(&node, "micro_ros_arduino_node", "", &support));
+  while( rclc_node_init_default(&node, "micro_ros_arduino_node", "", &support) != RCL_RET_OK ) {}
+  //RCCHECK(rclc_node_init_default(&node, "micro_ros_arduino_node", "", &support));
 
 #ifdef VEAB
   // create subscriber
-  RCCHECK(rclc_subscription_init_default(
-    &subscriber,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
-    SUB_TOPICNAME));
+  //RCCHECK(rclc_subscription_init_default(
+  //  &subscriber,
+  //  &node,
+  //  ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
+  //  SUB_TOPICNAME));
+  while(
+    rclc_subscription_init_default(
+      &subscriber,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
+      SUB_TOPICNAME) != RCL_RET_OK
+      ) {}
+
 #endif
 
   // create publisher
-  RCCHECK(rclc_publisher_init_default(
-    &publisher,
-    &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
-    PUB_TOPICNAME));
+  //RCCHECK(rclc_publisher_init_default(
+  //  &publisher,
+  //  &node,
+  //  ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
+  //  PUB_TOPICNAME));
+  while(
+    rclc_publisher_init_default(
+      &publisher,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt16MultiArray),
+      PUB_TOPICNAME) != RCL_RET_OK
+      ) {}
 
   // create timer,
   const unsigned int timer_timeout = 5;
-  RCCHECK(rclc_timer_init_default(
-    &timer,
-    &support,
-    RCL_MS_TO_NS(timer_timeout),
-    timer_callback));
+  //RCCHECK(rclc_timer_init_default(
+  //  &timer,
+  //  &support,
+  //  RCL_MS_TO_NS(timer_timeout),
+  //  timer_callback));
+  while(
+    rclc_timer_init_default(
+      &timer,
+      &support,
+      RCL_MS_TO_NS(timer_timeout),
+      timer_callback) != RCL_RET_OK
+      ) {}
 
   // create executor
 #ifdef VEAB
-  RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA));
+  //RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+  //RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA));
+  while( rclc_executor_init(&executor, &support.context, 2, &allocator) != RCL_RET_OK ) {}
+  while( rclc_executor_add_subscription(&executor, &subscriber, &msg_sub, &subscription_callback, ON_NEW_DATA) != RCL_RET_OK ){}
 #endif
 #ifdef POT
-  RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
+  //RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
+  while( rclc_executor_init(&executor, &support.context, 1, &allocator) != RCL_RET_OK ) {}
 #endif
-  RCCHECK(rclc_executor_add_timer(&executor, &timer));
-
+  //RCCHECK(rclc_executor_add_timer(&executor, &timer));
+  while( rclc_executor_add_timer(&executor, &timer) != RCL_RET_OK ) {}
 }
 
 void loop() {
