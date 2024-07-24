@@ -39,8 +39,9 @@ rcl_timer_t timer;
 #define CH_NUM 12
 
 #define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
-#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
 #define RCPOLL(fn) { while((fn != RCL_RET_OK)) {} }
+
+#define WDT_KEY (0xA5)
 
 // Since ARM Cortex-M3 does not perform parallel processing, 
 // there is no need to specify volatile, but for reusing this code
@@ -48,6 +49,13 @@ rcl_timer_t timer;
 volatile uint16_t desired[CH_NUM];
 volatile uint16_t realized[CH_NUM];
 
+/*This function is called from init(). If the user does not provide
+  this function, then the default action is to disable watchdog.
+  This function has to be overriden, otherwise watchdog won't work !! */
+
+void watchdogSetup(void) {
+  /*** watchdogDisable (); ***/
+}
 
 void error_loop(){
   while(1){
@@ -65,7 +73,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
       msg_pub.data.data[i] = realized[i];
     }
     // publish
-    RCSOFTCHECK(rcl_publish(&publisher, &msg_pub, NULL));
+    RCCHECK(rcl_publish(&publisher, &msg_pub, NULL));
   }
 }
 
@@ -81,6 +89,17 @@ void subscription_callback(const void * msgin)
 
 
 void setup() {
+
+  // Enable watchdog.
+  WDT->WDT_MR = WDT_MR_WDD(0xFFF) |
+                WDT_MR_WDFIEN |  //  Triggers an interrupt or WDT_MR_WDRSTEN to trigger a Reset
+                WDT_MR_WDV(256 * 2); // Watchdog triggers a reset or an interrupt after 2 seconds if underflow
+  // 2 seconds equal 84000000 * 2 = 168000000 clock cycles
+  /* Slow clock is running at 32.768 kHz
+    watchdog frequency is therefore 32768 / 128 = 256 Hz
+    WDV holds the periode in 256 th of seconds  */
+  NVIC_EnableIRQ(WDT_IRQn);
+
   set_microros_transports();
   
   // configure LED pin
@@ -188,6 +207,9 @@ void setup() {
 
 void loop() {
 
+  //Restart watchdog
+  WDT->WDT_CR = WDT_CR_KEY(WDT_KEY) | WDT_CR_WDRSTT;
+
   // peform ADC/DAC and update global variables
   for (size_t i = 0; i < CH_NUM; i++) {
     realized[i] = analogRead(i+ANALOG_PIN_LOWEST);
@@ -197,6 +219,6 @@ void loop() {
   }
 
   // let executors to run
-  RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
+  RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
 
 }
