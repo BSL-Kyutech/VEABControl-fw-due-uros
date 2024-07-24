@@ -73,7 +73,8 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
       msg_pub.data.data[i] = realized[i];
     }
     // publish
-    RCCHECK(rcl_publish(&publisher, &msg_pub, NULL));
+    //RCCHECK(rcl_publish(&publisher, &msg_pub, NULL));
+    RCPOLL(rcl_publish(&publisher, &msg_pub, NULL));
   }
 }
 
@@ -224,6 +225,7 @@ void loop() {
   }
 
   // let executors to run
-  RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
+  //RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
+  RCPOLL(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
 
 }
