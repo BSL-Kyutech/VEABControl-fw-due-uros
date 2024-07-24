@@ -90,16 +90,6 @@ void subscription_callback(const void * msgin)
 
 void setup() {
 
-  // Enable watchdog.
-  WDT->WDT_MR = WDT_MR_WDD(0xFFF) |
-                WDT_MR_WDFIEN |  //  Triggers an interrupt or WDT_MR_WDRSTEN to trigger a Reset
-                WDT_MR_WDV(256 * 2); // Watchdog triggers a reset or an interrupt after 2 seconds if underflow
-  // 2 seconds equal 84000000 * 2 = 168000000 clock cycles
-  /* Slow clock is running at 32.768 kHz
-    watchdog frequency is therefore 32768 / 128 = 256 Hz
-    WDV holds the periode in 256 th of seconds  */
-  NVIC_EnableIRQ(WDT_IRQn);
-
   set_microros_transports();
   
   // configure LED pin
@@ -159,6 +149,10 @@ void setup() {
 
   delay(2000);
 
+  //****************************************
+  // micro-ROS functions setup
+  //****************************************
+
   // create default allocator
   allocator = rcl_get_default_allocator();
 
@@ -200,15 +194,26 @@ void setup() {
   
 #endif
 #ifdef POT
+  WDT->WDT_CR = WDT_CR_KEY(WDT_KEY) | WDT_CR_WDRSTT; //Restart watchdog
   RCPOLL(rclc_executor_init(&executor, &support.context, 1, &allocator));
 #endif
+  WDT->WDT_CR = WDT_CR_KEY(WDT_KEY) | WDT_CR_WDRSTT; //Restart watchdog
   RCPOLL(rclc_executor_add_timer(&executor, &timer));
+  
+  // Enable watchdog.
+  WDT->WDT_MR = WDT_MR_WDD(0xFFF) |
+                WDT_MR_WDFIEN |  //  Triggers an interrupt or WDT_MR_WDRSTEN to trigger a Reset
+                WDT_MR_WDV(256 * 2); // Watchdog triggers a reset or an interrupt after 2 seconds if underflow
+  // 2 seconds equal 84000000 * 2 = 168000000 clock cycles
+  /* Slow clock is running at 32.768 kHz
+    watchdog frequency is therefore 32768 / 128 = 256 Hz
+    WDV holds the periode in 256 th of seconds  */
+  NVIC_EnableIRQ(WDT_IRQn);
 }
 
 void loop() {
-
-  //Restart watchdog
-  WDT->WDT_CR = WDT_CR_KEY(WDT_KEY) | WDT_CR_WDRSTT;
+  
+  WDT->WDT_CR = WDT_CR_KEY(WDT_KEY) | WDT_CR_WDRSTT; //Restart watchdog
 
   // peform ADC/DAC and update global variables
   for (size_t i = 0; i < CH_NUM; i++) {
